@@ -46,15 +46,44 @@ func concatMultipleSlices[T any](slices ...[]T) []T {
 
 // AdminUpdate performs an admin update of an ARO cluster
 func (m *manager) AdminUpdate(ctx context.Context) error {
-	toRun := m.adminUpdate()
-	return m.runSteps(ctx, toRun, "adminUpdate")
+	task := m.doc.OpenShiftCluster.Properties.MaintenanceTask
+	return m.runAdminUpdate(ctx, task)
 }
 
-func (m *manager) adminUpdate() []steps.Step {
-	task := m.doc.OpenShiftCluster.Properties.MaintenanceTask
+func (m *manager) runAdminUpdate(ctx context.Context, task api.MaintenanceTask) error {
+	stepsToRun := m.getAdminUpdateSteps(task)
+	err := m.runSteps(ctx, stepsToRun, "adminUpdate - "+string(task))
+
+	if err != nil {
+		task = downgradeTask(task)
+		if task != api.MaintenanceTaskNone {
+			err = m.runAdminUpdate(ctx, task)
+		}
+	}
+	return err
+}
+
+func downgradeTask(task api.MaintenanceTask) api.MaintenanceTask {
 	isEverything := task == api.MaintenanceTaskEverything || task == ""
 	isOperator := task == api.MaintenanceTaskOperator
+
+	if isEverything {
+		return api.MaintenanceTaskOperator
+	} else if isOperator {
+		return api.MaintenanceTaskRenewCerts
+	} else {
+		return api.MaintenanceTaskNone
+	}
+}
+
+func (m *manager) getAdminUpdateSteps(task api.MaintenanceTask) []steps.Step {
+	if task == api.MaintenanceTaskNone {
+		return nil
+	}
+
+	isEverything := task == api.MaintenanceTaskEverything || task == ""
 	isRenewCerts := task == api.MaintenanceTaskRenewCerts
+	isOperator := task == api.MaintenanceTaskOperator
 
 	stepsToRun := m.getZerothSteps()
 	if isEverything {

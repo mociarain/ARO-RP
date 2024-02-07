@@ -205,7 +205,7 @@ func TestAdminUpdateSteps(t *testing.T) {
 				doc:          doc,
 				adoptViaHive: adoptViaHive,
 			}
-			toRun := m.adminUpdate()
+			toRun := m.getAdminUpdateSteps(m.doc.OpenShiftCluster.Properties.MaintenanceTask)
 
 			var stepsToRun []string
 			for _, s := range toRun {
